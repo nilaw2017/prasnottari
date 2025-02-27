@@ -1,17 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { usePoints } from "@/context/PointsContext";
 import QuestionTimer from "@/components/QuestionTimer";
-import Results from "@/components/Results";
+import Results from "@/components/Result";
 
-const Quiz = ({ params }) => {
+interface Question {
+  question: string;
+  options: string[];
+  answer: string;
+}
+
+interface Subject {
+  name: string;
+  questions: Question[];
+}
+
+const Quiz = ({ params }: { params: { subject: string } }) => {
   const { subject } = params;
   const { points, setPoints } = usePoints();
 
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState(null);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
@@ -22,34 +33,43 @@ const Quiz = ({ params }) => {
 
   useEffect(() => {
     const fetchQuestions = async () => {
-      const response = await fetch("/data/questions.json");
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        const response = await fetch("/data/questions.json"); // Moved to public folder
+        const data: { subjects: Subject[] } = await response.json();
         const subjectData = data.subjects.find(
           (s) => s.name.toLowerCase() === subject,
         );
-        setQuestions(subjectData ? subjectData.questions : []);
-      } else {
-        console.error("Failed to fetch questions");
+        // Initialize all result states here to prevent stale data
+        if (subjectData) {
+          setQuestions(subjectData.questions);
+          setUnattemptedQuestions(subjectData.questions.length);
+          setCorrectAnswers(0);
+          setWrongAnswers(0);
+          setPoints(0);
+        }
+      } catch (error) {
+        console.error("Failed to fetch questions:", error);
       }
     };
     fetchQuestions();
   }, [subject]);
 
-  const handleAnswer = (option) => {
+  const handleAnswer = (option: string) => {
     if (isAnswered) return;
 
     setSelectedOption(option);
     setIsAnswered(true);
 
-    // Track the time spent on this question
-    setTotalTimeSpent(totalTimeSpent + timePerQuestion);
+    // Use functional update for time calculation
+    setTotalTimeSpent((prev) => prev + timePerQuestion);
 
     if (option === questions[currentQuestionIndex].answer) {
-      setPoints(points + 4); // 4 points for a correct answer
-      setCorrectAnswers(correctAnswers + 1);
+      setPoints((prev) => prev + 4);
+      setCorrectAnswers((prev) => prev + 1);
+      setUnattemptedQuestions((prev) => prev - 1);
     } else {
-      setWrongAnswers(wrongAnswers + 1);
+      setWrongAnswers((prev) => prev + 1);
+      setUnattemptedQuestions((prev) => prev - 1);
     }
   };
 
@@ -65,13 +85,21 @@ const Quiz = ({ params }) => {
     }
   };
 
-  // When time is up
-  const handleTimeUp = () => {
+  const handleTimeUp = useCallback(() => {
     setIsAnswered(true); // Consider the question unattempted if time runs out
     setUnattemptedQuestions(unattemptedQuestions + 1); // Increment the unattempted questions count
     setTotalTimeSpent(totalTimeSpent + 10);
     handleNext(); // Automatically go to the next question
-  };
+  }, [unattemptedQuestions, totalTimeSpent, handleNext]);
+
+  const handleSetTime = useCallback((time: number) => {
+    setTimePerQuestion(time);
+  }, []);
+
+  // Add loading state
+  if (questions.length === 0) {
+    return <div className="p-6 text-center">Loading questions...</div>;
+  }
 
   // Calculate the percentage score
   const percentage = Math.round((correctAnswers / questions.length) * 100);
@@ -104,9 +132,9 @@ const Quiz = ({ params }) => {
           {/* Timer */}
           <QuestionTimer
             onTimeUp={handleTimeUp}
-            setTimePerQuestion={setTimePerQuestion}
+            setTimePerQuestion={handleSetTime}
             isAnswered={isAnswered}
-            resetTimer={currentQuestionIndex}
+            resetTimer={() => {}}
           />
 
           {/* Options */}
@@ -150,7 +178,7 @@ const Quiz = ({ params }) => {
           unattemptedQuestions={unattemptedQuestions}
           percentage={percentage}
           timeSpent={totalTimeSpent}
-          averageTimePerQuestion={averageTimePerQuestion}
+          averageTimePerQuestion={Number(averageTimePerQuestion)}
         />
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import SubjectCard from "@/components/SubjectCard";
-
+import { Subject } from "@/data/questions";
 export default function Home() {
   const [subjects, setSubjects] = useState([]);
 
@@ -31,7 +31,7 @@ export default function Home() {
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 w-full max-w-screen-lg">
         {subjects.length > 0 ? (
-          subjects.map((subject) => (
+          subjects.map((subject: Subject) => (
             <SubjectCard key={subject.name} subject={subject} />
           ))
         ) : (
